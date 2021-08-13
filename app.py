@@ -158,7 +158,7 @@ fig6.for_each_annotation(lambda a: a.update(text=a.text.replace("Prestige Ranges
 
 #app = JupyterDash(__name__)
 app = dash.Dash(__name__)
-#server=app.server
+server=app.server
 
 app.layout=html.Div(
     [
