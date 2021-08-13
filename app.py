@@ -1,286 +1,278 @@
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
-
 import dash
+#from jupyter_dash import JupyterDash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
+#external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+#%%capture
+gss = pd.read_csv("https://github.com/jkropko/DS-6001/raw/master/localdata/gss2018.csv",
+                 encoding='cp1252', na_values=['IAP','IAP,DK,NA,uncodeable', 'NOT SURE',
+                                               'DK', 'IAP, DK, NA, uncodeable', '.a', "CAN'T CHOOSE"])
 
-## Download and wrangle the ANES data
-anes = pd.read_csv("https://github.com/jkropko/DS-6001/raw/master/localdata/anes_pilot2019_clean.csv", low_memory=False)
 
-anes_state = pd.read_csv("https://github.com/jkropko/DS-6001/raw/master/localdata/anes_pilot_2019.csv")
-anes_state = anes_state[['caseid', 'inputstate']]
-anes_state['state'] = anes_state['inputstate'].map({1:'Alabama',2:'Alaska',60:'American Samoa',
-                                                    3:'American Samoa',4:'Arizona',5:'Arkansas',
-                                                    81:'Baker Island',6:'California',7:'Canal Zone',
-                                                    8:'Colorado',9:'Connecticut',10:'Delaware',
-                                                    11:'District of Columbia',12:'Florida',
-                                                    64:'Federated States of Micronesia',13:'Georgia',
-                                                    14:'Guam',66:'Guam',15:'Hawaii',84:'Howland Island',
-                                                    16:'Idaho',17:'Illinois',18:'Indiana',19:'Iowa',
-                                                    86:'Jarvis Island',67:'Johnston Atoll',20:'Kansas',
-                                                    21:'Kentucky',89:'Kingman Reef',22:'Louisiana',
-                                                    23:'Maine',68:'Marshall Islands',24:'Maryland',
-                                                    25:'Massachusetts',26:'Michigan',71:'Midway Islands',
-                                                    27:'Minnesota',28:'Mississippi',29:'Missouri',
-                                                    30:'Montana',76:'Navassa Island',31:'Nebraska',
-                                                    32:'Nevada',33:'New Hampshire',34:'New Jersey',
-                                                    35:'New Mexico',36:'New York',37:'North Carolina',
-                                                    38:'North Dakota',69:'Northern Mariana Islands',
-                                                    39:'Ohio',40:'Oklahoma',41:'Oregon',70:'Palau',
-                                                    95:'Palmyra Atoll',42:'Pennsylvania',43:'Puerto Rico',
-                                                    72:'Puerto Rico',44:'Rhode Island',45:'South Carolina',
-                                                    46:'South Dakota',47:'Tennessee',48:'Texas',
-                                                    74:'U.S. Minor Outlying Islands',49:'Utah',
-                                                    50:'Vermont',51:'Virginia',
-                                                    52:'Virgin Islands of the U.S.',
-                                                    78:'Virgin Islands of the U.S.',79:'Wake Island',
-                                                    53:'Washington',54:'West Virginia',55:'Wisconsin',
-                                                    56:'Wyoming'})
-anes_state['state_abb'] = anes_state['inputstate'].map({1:'AL',2:'AK',60:'AS',3:'AS',4:'AZ',5:'AR',
-                                                    81:'UM',6:'CA',7:'CZ',8:'CO',9:'CT',10:'DE',
-                                                    11:'DC',12:'FL',64:'FM',13:'GA',
-                                                    14:'GU',66:'GU',15:'HI',84:'UM',
-                                                    16:'ID',17:'IL',18:'IN',19:'IA',
-                                                    86:'UM',67:'UM',20:'KS', 21:'KY',89:'UM',22:'LA',
-                                                    23:'ME',68:'UM',24:'MD',25:'MA',26:'MI',71:'UM',
-                                                    27:'MN',28:'MS',29:'MO',30:'MT',76:'UM',31:'NE',
-                                                    32:'NV',33:'NH',34:'NJ',35:'NM',36:'NY',37:'NC',
-                                                    38:'ND',69:'MP',39:'OH',40:'OK',41:'OR',70:'PW',
-                                                    95:'Palmyra Atoll',42:'PA',43:'PR',72:'PR',44:'RI',45:'SC',
-                                                    46:'SD',47:'TN',48:'TX',74:'UM',49:'UT',
-                                                    50:'VT',51:'VA',52:'VI',78:'VI',79:'UM',
-                                                    53:'WA',54:'WV',55:'WI',56:'WY'})
-anes_state = anes_state.rename({'inputstate':'stateID'}, axis=1)
-anes = pd.merge(anes, anes_state, on='caseid', validate='one_to_one')
+mycols = ['id', 'wtss', 'sex', 'educ', 'region', 'age', 'coninc',
+          'prestg10', 'mapres10', 'papres10', 'sei10', 'satjob',
+          'fechld', 'fefam', 'fepol', 'fepresch', 'meovrwrk'] 
+gss_clean = gss[mycols]
+gss_clean = gss_clean.rename({'wtss':'weight', 
+                              'educ':'education', 
+                              'coninc':'income', 
+                              'prestg10':'job_prestige',
+                              'mapres10':'mother_job_prestige', 
+                              'papres10':'father_job_prestige', 
+                              'sei10':'socioeconomic_index', 
+                              'fechld':'relationship', 
+                              'fefam':'male_breadwinner', 
+                              'fehire':'hire_women', 
+                              'fejobaff':'preference_hire_women', 
+                              'fepol':'men_bettersuited', 
+                              'fepresch':'child_suffer',
+                              'meovrwrk':'men_overwork'},axis=1)
+gss_clean.age = gss_clean.age.replace({'89 or older':'89'})
+gss_clean.age = gss_clean.age.astype('float')
 
-## Generate the individual tables and figures
 
-### Markdown text
-markdown_text = '''
-The [American National Election Study](https://electionstudies.org) (ANES) is a massive public opinion survey conducted after every national election. It is one of the greatest sources of data available about the voting population of the United States. It contains far more information than a typical public opinion poll. Iterations of the survey contain thousands of features from thousands of respondents, and examines people's attitudes on the election, the candidates, the parties, it collects massive amounts of demographic information and other characteristics from voters, and it records people's opinions on a myriad of political and social issues.
 
-Prior to each election the ANES conducts a "pilot study" that asks many of the questions that will be asked on the post-election survey. The idea is to capture a snapshot of the American electorate prior to the election and to get a sense of how the survey instrument is working so that adjustments can be made in time. Here we will work with the [2019 ANES pilot data](https://electionstudies.org/data-center/2019-pilot-study/). To understand the features and the values used to code responses, the data have an associated [questionnaire](https://electionstudies.org/wp-content/uploads/2020/02/anes_pilot_2019_questionnaire.pdf) and [codebook](https://electionstudies.org/wp-content/uploads/2020/02/anes_pilot_2019_userguidecodebook.pdf). The pilot data were collected in December 2019 and contain 900 features collected from 3,165 respondents. 
-'''
+gss_clean=gss_clean.replace({'female':'Female', 'male':'Male','strongly agree':'Strongly agree', 'agree':'Agree',
+                    'disagree':'Disagree', 'strongly disagree':'Strongly disagree'})
 
-### Table
-anes_display = anes.groupby('vote').agg({'vote':'size',
-                                        'age':'mean'})
-anes_display['percent'] = 100*anes_display.vote / sum(anes_display.vote)
 
-anes_display = pd.merge(anes_display, 100*pd.crosstab(anes.vote, anes.liveurban, normalize='index'), 
-         left_index=True, right_index=True)
-anes_display = anes_display[['vote', 'percent', 'age', 
-                            'City', 'Rural', 'Suburb', 'Town']]
-anes_display = anes_display.rename({'vote':'Votes',
-                                   'age':'Avg. age',
-                                   'percent':'Percent',
-                                   'City':'% City',
-                                   'Rural':'% Rural',
-                                   'Suburb':'% Suburban',
-                                   'Town':'% Town'}, axis=1)
-anes_display = round(anes_display, 2)
-anes_display = anes_display.reset_index().rename({'vote':'Candidate'}, axis=1)
-anes_display
 
-table = ff.create_table(anes_display)
-table.show()
+gss_clean = gss_clean.assign(education_level = 
+                               pd.cut(gss_clean.education,
+                                      
+                                      bins=[-.01,10,11,12,13,14,15,16,100], 
+                                      labels=("10 years or fewer",
+                                              "11 years", 
+                                              "12 years",
+                                              "13 years",
+                                              "14 years",
+                                              "15 years",
+                                              "16 years",
+                                              " More than 16 years")))
 
-### Barplot
-colpercent = round(100*pd.crosstab(anes.vote, anes.partyID, normalize='columns'),2).reset_index()
-colpercent = pd.melt(colpercent, id_vars = 'vote', value_vars = ['Democrat', 'Republican', 'Independent'])
-colpercent = colpercent.rename({'value':'colpercent'}, axis=1)
 
-rowpercent = round(100*pd.crosstab(anes.vote, anes.partyID, normalize='index'),2).reset_index()
-rowpercent = pd.melt(rowpercent, id_vars = 'vote', value_vars = ['Democrat', 'Republican', 'Independent'])
-rowpercent = rowpercent.rename({'value':'rowpercent'}, axis=1)
+website1="""
+According to research conducted by the Pew Research Center, the U.S historical gender pay gap was still persistent in 2020. Experts have found that factors such as years of education, occupational segregation, and work experience contribute to this gap. As a result, women as a whole continue to be overrepresented in lower positions in the workforce. Moreover, motherhood experience leads to interrupt their path and impacts their salaries in the long term.(https://www.pewresearch.org/fact-tank/2021/05/25/gender-pay-gap-facts/)
+"""
 
-votes = pd.crosstab(anes.vote, anes.partyID).reset_index()
-votes = pd.melt(votes, id_vars = 'vote', value_vars = ['Democrat', 'Republican', 'Independent'])
-votes = votes.rename({'value':'votes'}, axis=1)
+website2="""
+Women’s participation in the labor force contribute to the economy. The Brookings  Institution, a nonprofit policy organization, has demonstrated how the gender gap is an impediment to economic grow. Women earn around 85 % less than their male counterparts. The disparity persists regardless of women’s level of education. A way governments and employers can help curb this endemic problem is by examining child-care policies and pay transparency.(https://www.brookings.edu/blog/brookings-now/2019/03/22/charts-of-the-week-the-gender-wage-gap/)
+"""
 
-ftb = pd.crosstab(anes.vote, anes.partyID, values=anes.ftbiden, aggfunc='mean').round(2).reset_index()
-ftb = pd.melt(ftb, id_vars = 'vote', value_vars = ['Democrat', 'Republican', 'Independent'])
-ftb = ftb.rename({'value':'Biden thermometer'}, axis=1)
+gss_desc="""
+The [General Social Survey]( http://www.gss.norc.org/About-The-GSS) (GSS) is a massive public opinion survey to monitor and illustrate trends in opinions in the United States. It contains people’s views on special interest topics, such as crime and violence. Also, it covers trend data of demographics and attitudinal.  
+"""
 
-ftt = pd.crosstab(anes.vote, anes.partyID, values=anes.fttrump, aggfunc='mean').round(2).reset_index()
-ftt = pd.melt(ftt, id_vars = 'vote', value_vars = ['Democrat', 'Republican', 'Independent'])
-ftt = ftt.rename({'value':'Trump thermometer'}, axis=1)
+gss_clean2=gss_clean.rename({'sex':'Sex'}, axis=1)
+gss_clean2=gss_clean2.groupby('Sex').agg({'income':'mean', 'job_prestige':'mean', 'socioeconomic_index':'mean', 'education':'mean'}).round(2)
 
-anes_groupbar = pd.merge(colpercent, rowpercent, on=['vote', 'partyID'], validate='one_to_one')
-anes_groupbar = pd.merge(anes_groupbar, votes, on=['vote', 'partyID'], validate='one_to_one')
-anes_groupbar = pd.merge(anes_groupbar, ftb, on=['vote', 'partyID'], validate='one_to_one')
-anes_groupbar = pd.merge(anes_groupbar, ftt, on=['vote', 'partyID'], validate='one_to_one')
+gss_clean2 = gss_clean2.reset_index()
+gss_clean2 = gss_clean2.rename({'sex':'Sex',
+                                     'income':'Annual Income',
+                                     'job_prestige':'Job Prestige',
+                                     'socioeconomic_index':'Socioeconomic Index',
+                                     'education':'Years of Education'}, axis=1)
 
-anes_groupbar['coltext'] = anes_groupbar['colpercent'].astype(str) + '%'
-anes_groupbar['rowtext'] = anes_groupbar['rowpercent'].astype(str) + '%'
+t2=ff.create_table(gss_clean2)
+#t2.show()
 
-fig_bar = px.bar(anes_groupbar, x='partyID', y='rowpercent', color='partyID', 
-             facet_col='vote', facet_col_wrap=2,
-             hover_data = ['votes', 'Biden thermometer', 'Trump thermometer'],
-            labels={'partyID':'Party Identification', 'rowpercent':'Percent'},
-            text='rowtext', width=1000, height=600)
-fig_bar.update(layout=dict(title=dict(x=0.5)))
-fig_bar.update_layout(showlegend=False)
-fig_bar.for_each_annotation(lambda a: a.update(text=a.text.replace("vote=", "")))
+gss_clean['male_breadwinner'] = gss_clean['male_breadwinner'].astype('category')
+gss_clean['male_breadwinner'] = gss_clean['male_breadwinner'].cat.reorder_categories(['Strongly agree', 
+                                                            'Agree', 
+                                                            'Disagree', 
+                                                            'Strongly disagree'])
 
-### Line plot
-def q25(x):
-    return x.quantile(.25)
-def q75(x):
-    return x.quantile(.75)
-def iqr(x):
-    return x.quantile(.75) - x.quantile(.25)
 
-anes_line = anes.query("age <= 85").groupby('age').agg({'ftbiden':['mean','median',q25, q75, iqr]})
-anes_line.columns = anes_line.columns.droplevel()
-anes_line = anes_line.reset_index()
-anes_line['candidate'] = 'Joe Biden'
+gss_breadbar=gss_clean.groupby(['sex', 'male_breadwinner']).size().reset_index()
+gss_breadbar.rename({0:'freq'}, axis=1, inplace=True)
 
-anes_line2 = anes.query("age <= 85").groupby('age').agg({'fttrump':['mean','median',q25, q75, iqr]})
-anes_line2.columns = anes_line2.columns.droplevel()
-anes_line2 = anes_line2.reset_index()
-anes_line2['candidate'] = 'Donald Trump'
+fig3=px.bar(gss_breadbar, x='male_breadwinner',y='freq', color='sex',
+            labels={'sex':'Sex', 'freq':'Count', 'male_breadwinner':'Man must be breadwinner'},
+            hover_data = ['freq'],
+            #text='coltext',
+            barmode = 'group'
+            )
 
-anes_line = anes_line.append(anes_line2)
+fig3.update_layout(showlegend=True)
+fig3.update(layout=dict(title=dict(x=0.5)))
+#fig3.show()
 
-fig_line = px.line(anes_line, x='age', y='mean', color='candidate', 
-              line_dash = 'candidate',
-              labels={'age':'Age', 
-                      'mean':'Average thermometer rating'},
-              hover_data=['median', 'q25', 'q75', 'iqr'],
-              height=400, width=600)
-fig_line.update_layout(yaxis=dict(range=[0,100]))
-fig_line.update(layout=dict(title=dict(x=0.5)))
+fig4= px.scatter(gss_clean, x='job_prestige', y='income', color='sex',
+                 opacity=.4,
+                 trendline='ols',
+                 height=700, width=1000,
+                labels={'sex':'Sex','job_prestige':'Job Prestige', 'income':'Income', 'education':'Years of Education',
+                        'socioeconomic_index':'Socioeconomic Index'},
+                 hover_data={'education', 'socioeconomic_index'}
+                )
+#fig4.show()
 
-### Violin plot
-anes_cand = pd.melt(anes, id_vars = ['caseid'], 
-                    value_vars = ['ftbiden', 'fttrump',
-                                 'ftobama', 'ftsanders'])
-anes_cand = anes_cand.rename({'variable':'candidate',
-                             'value':'thermometer'}, axis=1)
-anes_cand['candidate'] = anes_cand['candidate'].map({'ftbiden':'Joe Biden',
-                                                     'fttrump':'Donald Trump',
-                                                     'ftobama':'Barack Obama',
-                                                     'ftsanders':'Bernie Sanders'})
 
-fig_vio = px.violin(anes_cand, y='thermometer', x = 'candidate', color = 'candidate',
-                   labels={'thermometer':'Feeling thermometer rating', 'candidate':''},
-                   title = 'Distribution of Thermometer Ratings')
-fig_vio.update(layout=dict(title=dict(x=0.5)))
+fig5_1=px.box(gss_clean, x='sex',y='income', 
+            labels={'sex':'Sex', 'income':'Annual Income'},
+            hover_data = {'sex':False},
+            #text='coltext',
+            )
+fig5_1.update_layout(showlegend=False)
+#fig5_1.show()
 
-### Map
-anes_state = pd.crosstab(anes.state_abb, anes.vote)
-anes_state = anes_state[['Donald Trump', 'Joe Biden']].reset_index()
-anes_state['difference'] = anes_state['Donald Trump'] - anes_state['Joe Biden']
-anes_state['result'] = pd.cut(anes_state.difference, [-100, -.00001, 0, 100], labels=['biden','tie','trump'])
-anes_state = pd.merge(anes_state, anes.groupby(['state', 'state_abb']).size().reset_index(), on='state_abb')
-anes_state = anes_state.rename({0:'voters'}, axis=1)
 
-fig_map = px.choropleth(anes_state, locations='state_abb', 
-                    hover_name='state', hover_data = ['Donald Trump', 'Joe Biden', 'difference', 'voters'],
-                    locationmode='USA-states', color='result', scope="usa",
-                   color_discrete_map = {'biden':'blue', 
-                                         'tie':'purple', 
-                                         'trump':'red'})
+fig5_2=px.box(gss_clean, x='sex',y='job_prestige', 
+            labels={'sex':'Sex', 'job_prestige':'Job Prestige'},
+            hover_data = {'sex':False},
+            #text='coltext'
+            )
+fig5_2.update_layout(showlegend=False)
+#fig5_2.show()
 
-### Scatterplot data
-ft_columns = [col for col in anes if col.startswith('ft')] 
-cat_columns = ['sex', 'partyID', 'vote', 'ideology'] 
-anes_ft = anes[ft_columns + cat_columns].dropna()
+gss_clean6 = gss_clean[['income','sex','job_prestige']]
+gss_clean6['prestige_ranges'] = pd.cut(gss_clean6.job_prestige,6,
+                                       labels=(1,2,3,4,5,6))
+gss_clean6 =gss_clean6.dropna()
 
-### Create app
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-server = app.server
+gss_clean6['prestige_ranges'] = gss_clean6['prestige_ranges'].cat.reorder_categories([1,2,3,4,5,6])
+#gss_clean6
 
-app.layout = html.Div(
+
+
+fig6=px.box(gss_clean6, x='sex',y='income', color='sex',
+            #points="all",
+            labels={'sex':'Sex', 'job_prestige':'Job Prestige', 'income':'Annual Income', 'prestige_ranges':'Prestige Ranges'},
+            color_discrete_map = {'Male':'blue', 'Female':'red'},
+            category_orders={'prestige_ranges':[1,2,3,4,5,6]},
+            facet_col='prestige_ranges',
+            facet_col_wrap=2,
+            height=1200           
+            )
+fig6.update_layout(showlegend=False)
+fig6.for_each_annotation(lambda a: a.update(text=a.text.replace("Prestige Ranges=", "Prestige Level ")))
+#fig6.show()
+
+#app = JupyterDash(__name__)
+app = dash.Dash(__name__)
+#server=app.server
+
+app.layout=html.Div(
     [
-        html.H1("Exploring the 2019 American National Election Pilot Study"),
         
-        dcc.Markdown(children = markdown_text),
-        
-        html.H2("Comparing Trump and Biden Voters"),
-        
-        dcc.Graph(figure=table),
-        
-        html.H2("Vote Choice By Party"),
-        
-        dcc.Graph(figure=fig_bar),
-        
-        html.H2("Distribution of Support for Political Figures"),
-        
-        dcc.Graph(figure=fig_vio),
-        
-        html.Div([
+        dcc.Tabs([
+            dcc.Tab(label='Intro', children=[
+                html.H1("Exploring the Gender Wage Gap in the United States of America"),
+                dcc.Markdown(children = website1),
+                dcc.Markdown(children = website2),
+            ]),
+            dcc.Tab(label='Dataset', children=[
+                html.H1("The GSS Dataset"),
+                dcc.Markdown(children = gss_desc),
+            ]),
+            dcc.Tab(label='Workforce Statistics', children=[
+                html.H2("Statistics of Workforce by Sex"),
+                dcc.Graph(figure=t2),
+            ]),
+            dcc.Tab(label='Perception', children=[
+                                
+                html.Div([
+
+                    html.H3("Survey"),
+
+                    dcc.Dropdown(id='x-axis',
+                        #options=[{'label': i, 'value': i} for i in ['satjob','relationship', 'male_breadwinner', 'men_bettersuited', 'child_suffer', 'men_overwork']],
+                        options=[{'label': 'Job Satisfaction', 'value': 'satjob'},
+                                 {'label': 'Working mother can be a good mother', 'value': 'relationship'},
+                                 {'label': 'Man must be the breadwinner', 'value': 'male_breadwinner'},
+                                 {'label': 'Men are better suited for politics', 'value': 'men_bettersuited'},
+                                 {'label': 'A child suffers if his or her mother works', 'value': 'child_suffer'},
+                                 {'label': 'Family suffers because men overwork', 'value': 'men_overwork'}
+                                ],
+                        value='male_breadwinner'),
+
+                    html.H3("Group answers by"),
+
+                    dcc.Dropdown(id='y-axis',
+                        #options=[{'label': i, 'value': i} for i in ['sex', 'region', 'education_level']],
+                        options=[{'label': 'Sex', 'value': 'sex'},
+                                 {'label': 'Region', 'value': 'region'},
+                                 {'label': 'Education Level', 'value': 'education_level'},
+                                ],
+                        value='sex'),
+
+
+                ], style={'width': '25%', 'float': 'left'}),
+                
+                html.Div([
             
-            html.H2("Vote Choice By State"),
-            
-            dcc.Graph(figure=fig_map)
-            
-        ], style = {'width':'48%', 'float':'left'}),
-        
-        html.Div([
-            
-            html.H2("Support by Age Group"),
-            
-            dcc.Graph(figure=fig_line)
-            
-        ], style = {'width':'48%', 'float':'right'}),
-        
-        html.H2("Feeling Thermometer Scatterplot"),
-        
-        html.Div([
-            
-            html.H3("x-axis feature"),
-            
-            dcc.Dropdown(id='x-axis',
-                         options=[{'label': i, 'value': i} for i in ft_columns],
-                         value='ftbiden'),
-            
-            html.H3("y-axis feature"),
-            
-            dcc.Dropdown(id='y-axis',
-                         options=[{'label': i, 'value': i} for i in ft_columns],
-                         value='fttrump'),
-            
-            html.H3("colors"),
-            
-            dcc.Dropdown(id='color',
-                         options=[{'label': i, 'value': i} for i in cat_columns])
-        
-        ], style={'width': '25%', 'float': 'left'}),
-        
-        html.Div([
-            
-            dcc.Graph(id="graph")
-        
-        ], style={'width': '70%', 'float': 'right'})
-    
-    ]
-)
+                    dcc.Graph(id="graph")
+
+                ], style={'width': '70%', 'float': 'right'})
+                        
+                
+                
+            ]),
+            dcc.Tab(label='Income v. Prestige', children=[
+                
+                dcc.Tab(label='Trends', children=[
+                    #Figure point 4
+                    html.H2("Income v. Job Prestige"),
+                    dcc.Graph(figure=fig4),
+                ]),
+                dcc.Tab(label='Distribution', children=[
+                    #Figure point 5
+                    html.Div([
+                                html.H2("Annual Income Distribution"),
+                                dcc.Graph(figure=fig5_1)
+                    ], style={'width':'48%', 'float':'left'}),
+
+                    html.Div([
+                                html.H2("Job Prestige Distribution"),
+                                dcc.Graph(figure=fig5_2)
+                    ], style={'width':'48%', 'float':'right'}),
+                ]),
+                dcc.Tab(label='Income by Prestige Level', children=[
+                    #Figure point 6
+                    html.H2("Annual Income by Job Prestige Level"),
+                    dcc.Graph(figure=fig6)
+                ]),
+                                            
+            ])
+        ])
+    ])
+
+
+
 @app.callback(Output(component_id="graph",component_property="figure"), 
                   [Input(component_id='x-axis',component_property="value"),
-                   Input(component_id='y-axis',component_property="value"),
-                   Input(component_id='color',component_property="value")])
+                   Input(component_id='y-axis',component_property="value")])
 
-def make_figure(x, y, color):
-    return px.scatter(
-        anes_ft,
-        x=x,
-        y=y,
-        color=color,
-        trendline='ols',
-        hover_data=['sex', 'partyID', 'vote', 'ideology'],
-        height=700,
-        opacity = .25
-)
+def make_figure(x, y):
+    
+    gss_bar=gss_clean.groupby([y, x]).size().reset_index()
+    gss_bar.rename({0:'freq'}, axis=1, inplace=True)
+    
+    
+    fig = px.bar(gss_bar,x=x,y='freq',color=y,
+                 labels={'sex':'Sex', 'freq':'Count', 
+                        'male_breadwinner':'Man must be breadwinner',
+                        'satjob':'On the whole, how satisfied are you with the work you do?',
+                        'men_bettersuited':'Most men are better suited emotionally for politics than are most women',
+                        'child_suffer':'A preschool child is likely to suffer if his or her mother works',
+                        'relationship':'A working mother can establish just as warm and secure a relationship with her children as a mother who does not work',
+                        'men_overwork':'Family life often suffers because men concentrate too much on their work'
+                        },
+                 hover_data = ['freq'],
+                 barmode = 'group'
+                )
+    return fig
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True, port=8051, host='0.0.0.0')
+    #app.run_server(mode='inline', debug=True, port=8051)
+    #app.run_server(debug=True, port=8051, host='0.0.0.0')
+    app.run_server(debug=True)
